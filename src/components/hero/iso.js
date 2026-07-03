@@ -43,3 +43,58 @@ export function boxFaces(cx, cy, hw, hd, h, z0 = 0) {
     left: poly([T.front, B.front, B.left, T.left]), // +y facing face (screen left)
   }
 }
+
+/**
+ * World-space perimeter of a rounded rectangle centered (cx, cy),
+ * half-width hw, half-depth hd, corner radius r. Clockwise in world XY,
+ * corner arcs sampled with `seg` segments each.
+ */
+export function roundedOutline(cx, cy, hw, hd, r, seg = 5) {
+  const pts = []
+  const arc = (ccx, ccy, a0, a1) => {
+    for (let i = 0; i <= seg; i++) {
+      const a = a0 + ((a1 - a0) * i) / seg
+      pts.push([ccx + r * Math.cos(a), ccy + r * Math.sin(a)])
+    }
+  }
+  const HP = Math.PI / 2
+  // clockwise in world XY: back-right, front-right, front-left, back-left corners
+  arc(cx + hw - r, cy - hd + r, -HP, 0)
+  arc(cx + hw - r, cy + hd - r, 0, HP)
+  arc(cx - hw + r, cy + hd - r, HP, Math.PI)
+  arc(cx - hw + r, cy - hd + r, Math.PI, 1.5 * Math.PI)
+  return pts
+}
+
+/** Closed path of a rounded rect outline at height z. */
+export const roundedTopPath = (cx, cy, hw, hd, r, z) =>
+  poly(roundedOutline(cx, cy, hw, hd, r).map(([x, y]) => [x, y, z]))
+
+/**
+ * Faces of a rounded-corner box (realistic enclosure shells).
+ * Returns { top, side } — `side` is the single camera-facing wall band
+ * running from the rightmost silhouette point through the front corners
+ * to the leftmost silhouette point.
+ */
+export function roundedBoxFaces(cx, cy, hw, hd, h, z0 = 0, r = 10) {
+  const zt = z0 + h
+  const pts = roundedOutline(cx, cy, hw, hd, r)
+  // silhouette extremes in screen-x: max(x−y) → right edge, min(x−y) → left edge
+  let iMax = 0
+  let iMin = 0
+  pts.forEach(([x, y], i) => {
+    if (x - y > pts[iMax][0] - pts[iMax][1]) iMax = i
+    if (x - y < pts[iMin][0] - pts[iMin][1]) iMin = i
+  })
+  const chain = []
+  for (let i = iMax; ; i = (i + 1) % pts.length) {
+    chain.push(pts[i])
+    if (i === iMin) break
+  }
+  const topChain = chain.map(([x, y]) => [x, y, zt])
+  const botChain = [...chain].reverse().map(([x, y]) => [x, y, z0])
+  return {
+    top: poly(pts.map(([x, y]) => [x, y, zt])),
+    side: poly([...topChain, ...botChain]),
+  }
+}

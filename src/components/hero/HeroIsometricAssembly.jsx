@@ -1,117 +1,118 @@
 import { motion } from 'framer-motion'
-import { iso, poly, line, boxFaces } from './iso.js'
+import { iso, poly, line, boxFaces, roundedBoxFaces, roundedTopPath } from './iso.js'
 import useReducedMotion from './useReducedMotion.js'
 
 /**
- * SUTRA §1 — the signature element, v2.
- * A detailed, engineering-drawing-grade exploded view of the SSM TCU itself:
- * die-cast base → 6-layer PCB → compute components → EMI shield → enclosure
- * lid → GNSS/LTE antenna puck. Hand-coded isometric SVG, precision linework,
- * monochrome + single amber signal accent (§2.1).
+ * SUTRA §1 — the signature element, v3.
+ * A faithful isometric rendering of the SSM AIS-140 TCU as it actually is:
+ * a low-profile rounded ABS enclosure with side mounting flanges, recessed
+ * label panel, status-LED trio, and a vehicle wiring harness — exploding
+ * into base shell → PCB → components → lid. Hand-coded SVG, monochrome +
+ * single amber accent (§2.1).
  *
- * Layers carry data-layer + data-explode (screen px). useScrollChoreography
- * scrubs each layer's translateY to its exploded offset 1:1 with scroll.
- * At idle only the product itself animates: LED blink, antenna ring, bob.
+ * Explode offsets are in viewBox user units (CSS transforms on SVG children
+ * operate in user space), and the viewBox reserves full headroom for the
+ * exploded state — the animation can never escape the hero.
  */
 
-// ---------- geometry (world units) ----------
-const S = 1 // world scale
+// ---------- enclosure geometry (world units) ----------
+const HW = 110 // half-length (x)
+const HD = 70 // half-depth (y)
+const R = 16 // corner radius
+const BASE_H = 12
+const LID_Z0 = BASE_H
+const LID_H = 22
+const LID_TOP = LID_Z0 + LID_H // 34
 
-// Layer 1 — die-cast base tray
-const base = boxFaces(0, 0, 104, 74, 18, 0)
-const baseFoot = [
-  boxFaces(-118, -60, 12, 10, 8, 0),
-  boxFaces(-118, 60, 12, 10, 8, 0),
-  boxFaces(118, -60, 12, 10, 8, 0),
-  boxFaces(118, 60, 12, 10, 8, 0),
-]
+// L1 — base shell + mounting flanges + harness (never moves)
+const baseShell = roundedBoxFaces(0, 0, HW, HD, BASE_H, 0, R)
+const earL = boxFaces(-124, 0, 16, 24, 6, 0)
+const earR = boxFaces(124, 0, 16, 24, 6, 0)
+const screwL = iso(-128, 0, 6)
+const screwR = iso(128, 0, 6)
 
-// Layer 2 — PCB
-const pcb = boxFaces(0, 0, 94, 64, 6, 18)
-const PCB_TOP_Z = 24.2
+// harness: ribbed gland boot on the front-right wall → cable → 12-pin connector
+const boot = boxFaces(114, 30, 7, 9, 8, 2)
+const conn = boxFaces(188, 96, 17, 11, 11, 0)
+const cableA = iso(121, 30, 6)
+const cableB = iso(171, 92, 6)
+const CABLE = `M${cableA[0]},${cableA[1]} C${cableA[0] + 26},${cableA[1] + 16} ${cableB[0] - 30},${cableB[1] - 22} ${cableB[0]},${cableB[1]}`
+const PINS = [0, 1, 2, 3, 4, 5].map((i) =>
+  line([[206, 88 + i * 3.2, 5.5], [213, 88 + i * 3.2, 5.5]]),
+)
 
-// PCB copper traces on top face (world z just above pcb top)
+// L2 — PCB
+const pcb = boxFaces(0, 0, 100, 60, 5, BASE_H)
+const PCB_TOP = 17.2
 const TRACES = [
-  line([[-80, -40, PCB_TOP_Z], [-30, -40, PCB_TOP_Z], [-18, -28, PCB_TOP_Z], [12, -28, PCB_TOP_Z]]),
-  line([[-80, -18, PCB_TOP_Z], [-52, -18, PCB_TOP_Z], [-44, -10, PCB_TOP_Z], [-44, 14, PCB_TOP_Z]]),
-  line([[-80, 34, PCB_TOP_Z], [-58, 34, PCB_TOP_Z], [-50, 42, PCB_TOP_Z], [-8, 42, PCB_TOP_Z]]),
-  line([[78, -44, PCB_TOP_Z], [52, -44, PCB_TOP_Z], [44, -36, PCB_TOP_Z], [44, -20, PCB_TOP_Z]]),
-  line([[82, 20, PCB_TOP_Z], [66, 20, PCB_TOP_Z], [58, 28, PCB_TOP_Z], [58, 46, PCB_TOP_Z]]),
-  line([[12, -28, PCB_TOP_Z], [12, -6, PCB_TOP_Z]]),
+  line([[-88, -34, PCB_TOP], [-46, -34, PCB_TOP], [-36, -24, PCB_TOP], [-8, -24, PCB_TOP]]),
+  line([[-88, 6, PCB_TOP], [-62, 6, PCB_TOP], [-56, 12, PCB_TOP], [-56, 34, PCB_TOP]]),
+  line([[88, -40, PCB_TOP], [58, -40, PCB_TOP], [50, -32, PCB_TOP], [50, -14, PCB_TOP]]),
+  line([[90, 30, PCB_TOP], [72, 30, PCB_TOP], [64, 38, PCB_TOP], [36, 38, PCB_TOP]]),
+  line([[-8, -24, PCB_TOP], [-8, 2, PCB_TOP]]),
 ]
-// via dots at trace ends
 const VIAS = [
-  [-80, -40], [12, -6], [-80, -18], [-44, 14], [-80, 34], [-8, 42], [78, -44], [44, -20], [82, 20], [58, 46],
-].map(([x, y]) => iso(x, y, PCB_TOP_Z))
+  [-88, -34], [-8, 2], [-88, 6], [-56, 34], [88, -40], [50, -14], [90, 30], [36, 38],
+].map(([x, y]) => iso(x, y, PCB_TOP))
+const HOLES = [[-90, -50], [90, -50], [90, 50], [-90, 50]].map(([x, y]) => iso(x, y, PCB_TOP))
 
-// mounting holes on PCB corners
-const HOLES = [
-  [-84, -54], [84, -54], [84, 54], [-84, 54],
-].map(([x, y]) => iso(x, y, PCB_TOP_Z))
-
-// Layer 3 — components (sit on PCB, world z0 = 24)
-const CZ = 24
-const soc = boxFaces(-34, -8, 17, 17, 9, CZ) // edge-compute SoC
-const lte = boxFaces(34, -30, 21, 13, 7, CZ) // 4G/LTE + mesh radio
-const gnss = boxFaces(42, 26, 13, 13, 8, CZ) // GNSS receiver
-const esim = boxFaces(-52, 32, 10, 7, 3, CZ) // eSIM
-const canCtl = boxFaces(-2, 30, 12, 8, 5, CZ) // CAN transceiver
-const supercap = boxFaces(4, -44, 8, 8, 11, CZ) // backup supercap (round-ish box)
-// DB connector block on the front-right PCB edge
-const connBlock = boxFaces(88, 10, 7, 22, 12, CZ)
-
-// SoC pin stubs (little legs on two visible sides)
-const SOC_PINS = []
-for (let i = 0; i < 6; i++) {
-  const t = -22 + i * 6
-  SOC_PINS.push(line([[-34 + 17, -8 + t * 0.9, CZ + 2], [-34 + 21, -8 + t * 0.9, CZ + 2]]))
-  SOC_PINS.push(line([[-34 + t * 0.9, -8 + 17, CZ + 2], [-34 + t * 0.9, -8 + 21, CZ + 2]]))
-}
-
-// Layer 4 — EMI shield frame (thin plate with a big cutout look)
-const shield = boxFaces(0, 0, 96, 66, 4, 36)
-const SHIELD_TOP = 40.2
-const shieldCut = poly([
-  [-70, -44, SHIELD_TOP], [70, -44, SHIELD_TOP], [70, 44, SHIELD_TOP], [-70, 44, SHIELD_TOP],
+// L3 — components (z0 = 17)
+const CZ = 17
+const patchBase = boxFaces(-56, -26, 14, 14, 4, CZ) // GNSS ceramic patch antenna
+const patchEl = poly([
+  [-64, -34, CZ + 4.2], [-48, -34, CZ + 4.2], [-48, -18, CZ + 4.2], [-64, -18, CZ + 4.2],
 ])
-// perforation dots on shield rim
-const PERF = []
-for (let i = 0; i < 9; i++) {
-  PERF.push(iso(-84 + i * 21, -55, SHIELD_TOP))
-  PERF.push(iso(-84 + i * 21, 55, SHIELD_TOP))
+const lte = boxFaces(-4, -26, 21, 14, 4, CZ) // LTE Cat-1 module
+const soc = boxFaces(-40, 20, 14, 14, 5, CZ) // edge SoC
+const esim = boxFaces(28, -42, 7, 6, 3, CZ)
+const canCtl = boxFaces(22, 18, 11, 7, 4, CZ)
+const shieldCan = boxFaces(62, 28, 14, 11, 6, CZ) // RF shield can
+// backup supercap — cylinder
+const capC = [58, -22]
+const capTop = iso(capC[0], capC[1], CZ + 14)
+const capBot = iso(capC[0], capC[1], CZ)
+const CAP_RX = 11
+const CAP_RY = 6.4
+// LTE module castellation dashes
+const CASTS = [0, 1, 2, 3, 4].map((i) =>
+  line([[-22 + i * 9, -11.5, CZ + 1], [-22 + i * 9, -9, CZ + 1]]),
+)
+// pin header near front edge
+const HDR = [0, 1, 2, 3, 4, 5, 6].map((i) =>
+  iso(-14 + i * 6, 48, CZ + 2),
+)
+
+// L4 — lid shell
+const lidShell = roundedBoxFaces(0, 0, HW, HD, LID_H, LID_Z0, R)
+const lidPanel = roundedTopPath(-14, 0, 64, 44, 10, LID_TOP + 0.2)
+const seam = roundedTopPath(0, 0, HW, HD, R, LID_Z0) // parting line
+// status LED trio on top face, front-right
+const LEDS = [
+  { p: iso(78, 44, LID_TOP + 0.2), on: true },
+  { p: iso(89, 44, LID_TOP + 0.2), on: false },
+  { p: iso(100, 44, LID_TOP + 0.2), on: false },
+]
+// side ribs on the front wall of the lid
+const RIBS = [-72, -48, -24, 0, 24, 48, 72].map((x) =>
+  line([[x, HD, LID_Z0 + 5], [x, HD, LID_Z0 + LID_H - 5]]),
+)
+// iso-plane text transform: maps flat text onto the top face
+const isoText = (wx, wy, wz) => {
+  const [px, py] = iso(wx, wy, wz)
+  return `matrix(0.866 0.5 -0.866 0.5 ${px.toFixed(1)} ${py.toFixed(1)})`
 }
 
-// Layer 5 — enclosure lid
-const lid = boxFaces(0, 0, 104, 74, 16, 44)
-const LID_TOP = 60.2
-// lid vents
-const VENTS = []
-for (let i = 0; i < 6; i++) {
-  const y = -20 + i * 9
-  VENTS.push(line([[30, y, LID_TOP], [78, y, LID_TOP]]))
+// idle GNSS signal arcs above the patch corner (opacity pulse only)
+const arcAt = (z, r) => {
+  const [cx, cy] = iso(-56, -26, z)
+  return `M${cx - r},${cy} A${r},${r * 0.55} 0 0 1 ${cx + r},${cy}`
 }
-// lid screws
-const SCREWS = [
-  [-92, -62], [92, -62], [92, 62], [-92, 62],
-].map(([x, y]) => iso(x, y, LID_TOP))
-// recessed label plate
-const labelPlate = poly([
-  [-78, -30, LID_TOP], [-18, -30, LID_TOP], [-18, 26, LID_TOP], [-78, 26, LID_TOP],
-])
 
-// Layer 6 — antenna puck + mast
-const puck = boxFaces(46, -34, 16, 16, 7, 60)
-const mastB = iso(46, -34, 67)
-const mastT = iso(46, -34, 118)
-const ringC = iso(46, -34, 118)
-
-// corner guide lines (dashed verticals shown while exploded)
-const GUIDES = [
-  [-104, -74], [104, -74], [104, 74], [-104, 74],
-].map(([x, y]) => ({ from: iso(x, y, 18), len: 300 }))
+// corner guide lines shown while exploded
+const GUIDES = [[-HW, -HD], [HW, -HD], [HW, HD], [-HW, HD]].map(([x, y]) => iso(x, y, BASE_H))
 
 // ground grid
-const GR = 175
+const GR = 150
 const GRID = []
 for (let i = -3; i <= 3; i++) {
   const c = (i * GR) / 3.5
@@ -126,13 +127,23 @@ const stroke = (o = 0.85, w = 1.2) => ({
   strokeLinejoin: 'round',
 })
 
-/** A standard 3-face box with consistent light-side shading. */
-function Box({ f, topFill = 'var(--surface)', sideFill = 'var(--void)', dark, w = 1.1, o = 0.75 }) {
+/** Standard 3-face box. */
+function Box({ f, topFill = 'var(--surface)', dark, w = 1.1, o = 0.75 }) {
   return (
     <g {...stroke(o, w)}>
-      <path d={f.left} fill={dark ? 'var(--ink)' : sideFill} fillOpacity={dark ? 0.85 : 1} />
+      <path d={f.left} fill={dark ? 'var(--ink)' : 'var(--void)'} fillOpacity={dark ? 0.85 : 1} />
       <path d={f.right} fill={dark ? 'var(--ink)' : topFill} fillOpacity={dark ? 0.7 : 1} />
       <path d={f.top} fill={dark ? 'var(--ink)' : topFill} fillOpacity={dark ? 0.95 : 1} />
+    </g>
+  )
+}
+
+/** Rounded enclosure shell: single wrapped side band + top. */
+function Shell({ f, dark, w = 1.2 }) {
+  return (
+    <g {...stroke(0.85, w)}>
+      <path d={f.side} fill={dark ? 'var(--ink)' : 'var(--surface)'} fillOpacity={dark ? 0.82 : 1} />
+      <path d={f.top} fill={dark ? 'var(--ink)' : 'var(--surface)'} fillOpacity={dark ? 0.96 : 1} />
     </g>
   )
 }
@@ -143,7 +154,6 @@ export default function HeroIsometricAssembly() {
   const reduced = useReducedMotion()
   const g = (props) => (reduced ? { initial: false } : props)
 
-  // ASSEMBLE (§5): layers drop/rise into place, staggered, ~1.4s total
   const layerIn = (delay, fromY) =>
     g({
       initial: { opacity: 0, y: fromY },
@@ -154,9 +164,9 @@ export default function HeroIsometricAssembly() {
   return (
     <svg
       className="assembly-svg"
-      viewBox="-345 -275 690 505"
+      viewBox="-330 -285 660 505"
       role="img"
-      aria-label="Exploded isometric engineering view of the Six Sense Mobility AIS-140 TCU: die-cast base, 6-layer PCB, edge-compute components, EMI shield, IP67 enclosure lid, and GNSS/LTE antenna."
+      aria-label="Exploded isometric view of the Six Sense Mobility AIS-140 TCU: rugged IP67 enclosure base with mounting flanges and vehicle harness, 4-layer PCB, GNSS ceramic patch antenna, LTE and edge-compute modules, and status-LED lid."
     >
       {/* ground plane */}
       <motion.g
@@ -169,10 +179,10 @@ export default function HeroIsometricAssembly() {
 
       {/* corner guide lines — revealed by scroll explode */}
       <g data-guides="1" opacity="0">
-        {GUIDES.map(({ from }, i) => (
+        {GUIDES.map(([x, y], i) => (
           <path
             key={i}
-            d={`M${from[0]},${from[1]} L${from[0]},${from[1] - 300}`}
+            d={`M${x},${y} L${x},${y - 230}`}
             stroke="var(--graphite)" strokeOpacity="0.5" strokeWidth="1" strokeDasharray="3 4" fill="none"
           />
         ))}
@@ -181,19 +191,35 @@ export default function HeroIsometricAssembly() {
       {/* whole-device idle bob (§6 hub row: ±6px 4.2s) */}
       <g className="loop-hub-bob">
 
-        {/* L1 — die-cast base tray */}
-        <motion.g data-layer="base" data-explode="0" {...layerIn(0.2, 60)}>
-          {baseFoot.map((f, i) => <Box key={i} f={f} w={1} o={0.6} />)}
-          <Box f={base} w={1.25} />
-          {/* base ribs */}
-          {[-60, -20, 20, 60].map((x, i) => (
-            <path key={i} d={line([[x, 74.5, 4], [x, 74.5, 14]])} {...stroke(0.4, 1)} fill="none" />
+        {/* L1 — base shell · flanges · vehicle harness (grounded, explode 0) */}
+        <motion.g data-layer="base" data-explode="0" {...layerIn(0.2, 46)}>
+          {/* harness first (behind base): boot → cable → 12-pin connector */}
+          <path d={CABLE} fill="none" {...stroke(0.8, 3.4)} strokeLinecap="round" />
+          <path d={CABLE} fill="none" stroke="var(--void)" strokeOpacity="0.55" strokeWidth="1.1" strokeLinecap="round" />
+          <Box f={conn} dark w={1.1} />
+          {PINS.map((d, i) => <path key={i} d={d} {...stroke(0.6, 1.5)} fill="none" />)}
+          <text transform={isoText(188, 118, 0)} fontFamily="var(--font-mono)" fontSize="7.5" letterSpacing="1" fill="var(--graphite)" textAnchor="middle">12-PIN</text>
+
+          <Box f={earL} w={1} o={0.65} />
+          <Box f={earR} w={1} o={0.65} />
+          <circle cx={screwL[0]} cy={screwL[1]} r="4" fill="none" stroke="var(--ink)" strokeOpacity="0.6" strokeWidth="1.1" />
+          <circle cx={screwL[0]} cy={screwL[1]} r="1.4" fill="var(--graphite)" />
+          <circle cx={screwR[0]} cy={screwR[1]} r="4" fill="none" stroke="var(--ink)" strokeOpacity="0.6" strokeWidth="1.1" />
+          <circle cx={screwR[0]} cy={screwR[1]} r="1.4" fill="var(--graphite)" />
+
+          <Shell f={baseShell} />
+          <Box f={boot} dark w={1} o={0.7} />
+          {/* boot ribs */}
+          {[0, 1, 2].map((i) => (
+            <path key={i} d={line([[109 + i * 4, 39.2, 3], [109 + i * 4, 39.2, 9]])} stroke="var(--void)" strokeOpacity="0.5" strokeWidth="1" fill="none" />
           ))}
-          <text x={iso(0, 76, 8)[0]} y={iso(0, 76, 8)[1]} fontFamily="var(--font-mono)" fontSize="8" letterSpacing="1.5" fill="var(--graphite)" textAnchor="middle">DIE-CAST AL · IP67</text>
+          {/* SIM tray slot on front wall */}
+          <path d={line([[-84, HD + 0.4, 4.5], [-58, HD + 0.4, 4.5]])} {...stroke(0.55, 2.4)} strokeLinecap="round" fill="none" />
+          <text transform={isoText(0, 92, 0)} fontFamily="var(--font-mono)" fontSize="8" letterSpacing="1.5" fill="var(--graphite)" textAnchor="middle">IP67 · ABS · VIBRATION MOUNT</text>
         </motion.g>
 
         {/* L2 — PCB */}
-        <motion.g data-layer="pcb" data-explode="56" {...layerIn(0.38, 70)}>
+        <motion.g data-layer="pcb" data-explode="46" {...layerIn(0.38, 56)}>
           <g {...stroke(0.75, 1.1)}>
             <path d={pcb.left} fill="var(--surface)" />
             <path d={pcb.right} fill="var(--surface)" />
@@ -205,92 +231,88 @@ export default function HeroIsometricAssembly() {
           {VIAS.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="1.6" fill="var(--graphite)" />)}
           {HOLES.map(([x, y], i) => (
             <g key={i}>
-              <circle cx={x} cy={y} r="3.4" fill="none" stroke="var(--graphite)" strokeOpacity="0.7" strokeWidth="1" />
-              <circle cx={x} cy={y} r="1.2" fill="var(--graphite)" />
+              <circle cx={x} cy={y} r="3.2" fill="none" stroke="var(--graphite)" strokeOpacity="0.7" strokeWidth="1" />
+              <circle cx={x} cy={y} r="1.1" fill="var(--graphite)" />
             </g>
           ))}
         </motion.g>
 
-        {/* L3 — compute components */}
-        <motion.g data-layer="comps" data-explode="102" {...layerIn(0.56, 80)}>
-          {SOC_PINS.map((d, i) => <path key={i} d={d} {...stroke(0.4, 0.9)} fill="none" />)}
-          <Box f={soc} dark />
+        {/* L3 — components */}
+        <motion.g data-layer="comps" data-explode="84" {...layerIn(0.56, 64)}>
+          {/* GNSS ceramic patch */}
+          <Box f={patchBase} topFill="var(--surface)" />
+          <path d={patchEl} fill="var(--ink)" fillOpacity="0.12" stroke="var(--ink)" strokeOpacity="0.6" strokeWidth="1" />
+          <circle cx={iso(-56, -26, CZ + 4.4)[0]} cy={iso(-56, -26, CZ + 4.4)[1]} r="1.4" fill="var(--graphite)" />
+          {/* LTE module */}
           <Box f={lte} dark />
-          <Box f={gnss} />
+          {CASTS.map((d, i) => <path key={i} d={d} stroke="var(--void)" strokeOpacity="0.6" strokeWidth="1" fill="none" />)}
+          <text transform={isoText(-4, -26, CZ + 4.2)} fontFamily="var(--font-mono)" fontSize="7" letterSpacing="0.8" fill="var(--void)" textAnchor="middle">LTE CAT-1</text>
+          {/* edge SoC */}
+          <Box f={soc} dark />
+          <text transform={isoText(-40, 20, CZ + 5.2)} fontFamily="var(--font-mono)" fontSize="7" letterSpacing="0.8" fill="var(--void)" textAnchor="middle">SSM-EDGE</text>
+          {/* eSIM · CAN · shield can */}
           <Box f={esim} />
           <Box f={canCtl} />
-          <Box f={supercap} />
-          <Box f={connBlock} />
-          {/* chip markings */}
-          <text x={iso(-34, -8, 34)[0]} y={iso(-34, -8, 34)[1]} fontFamily="var(--font-mono)" fontSize="7.5" letterSpacing="1" fill="var(--void)" textAnchor="middle">SSM-EDGE</text>
-          <text x={iso(34, -30, 32)[0]} y={iso(34, -30, 32)[1]} fontFamily="var(--font-mono)" fontSize="6.5" letterSpacing="0.5" fill="var(--void)" textAnchor="middle">LTE·MESH</text>
-          <text x={iso(42, 26, 33)[0]} y={iso(42, 26, 33)[1]} fontFamily="var(--font-mono)" fontSize="6" letterSpacing="0.5" fill="var(--ink)" textAnchor="middle">GNSS</text>
-          {/* status LED on SoC — only the product animates */}
-          <circle className="loop-led" cx={iso(-14, -22, CZ + 9.5)[0]} cy={iso(-14, -22, CZ + 9.5)[1]} r="2.2" fill="var(--signal)" />
-          {/* connector pins */}
+          <Box f={shieldCan} />
           {[0, 1, 2, 3].map((i) => (
-            <path key={i} d={line([[95.5, 0 + i * 7 - 4, CZ + 3], [101, 0 + i * 7 - 4, CZ + 3]])} {...stroke(0.55, 1.6)} fill="none" />
+            <circle key={i} cx={iso(54 + i * 6, 22, CZ + 6.2)[0]} cy={iso(54 + i * 6, 22, CZ + 6.2)[1]} r="0.9" fill="var(--graphite)" />
           ))}
-        </motion.g>
-
-        {/* L4 — EMI shield frame */}
-        <motion.g data-layer="shield" data-explode="150" {...layerIn(0.74, 90)}>
+          {/* supercap cylinder */}
           <g {...stroke(0.7, 1.1)}>
-            <path d={shield.left} fill="var(--surface)" />
-            <path d={shield.right} fill="var(--surface)" />
-            <path d={shield.top} fill="var(--surface)" />
+            <path d={`M${capBot[0] - CAP_RX},${capBot[1]} L${capTop[0] - CAP_RX},${capTop[1]} M${capBot[0] + CAP_RX},${capBot[1]} L${capTop[0] + CAP_RX},${capTop[1]}`} fill="none" />
+            <ellipse cx={capBot[0]} cy={capBot[1]} rx={CAP_RX} ry={CAP_RY} fill="var(--surface)" />
+            <ellipse cx={capTop[0]} cy={capTop[1]} rx={CAP_RX} ry={CAP_RY} fill="var(--surface)" />
+            <path d={`M${capTop[0] - 4},${capTop[1]} L${capTop[0] + 4},${capTop[1]}`} stroke="var(--graphite)" />
           </g>
-          <path d={shieldCut} fill="var(--void)" fillOpacity="0.35" stroke="var(--ink)" strokeOpacity="0.5" strokeWidth="1" />
-          {PERF.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="1.1" fill="var(--graphite)" />)}
+          {/* pin header */}
+          {HDR.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="1.1" fill="var(--graphite)" />)}
         </motion.g>
 
-        {/* L5 — enclosure lid (bold dark body — the product's face) */}
-        <motion.g data-layer="lid" data-explode="206" {...layerIn(0.92, 100)}>
-          <Box f={lid} dark w={1.25} />
-          {VENTS.map((d, i) => <path key={i} d={d} stroke="var(--void)" strokeOpacity="0.5" strokeWidth="1.1" fill="none" />)}
-          {SCREWS.map(([x, y], i) => (
-            <g key={i} stroke="var(--void)" strokeOpacity="0.75" strokeWidth="0.9">
-              <circle cx={x} cy={y} r="3" fill="var(--ink)" />
-              <path d={`M${x - 1.7},${y} L${x + 1.7},${y}`} />
+        {/* L4 — lid shell (the product's face) */}
+        <motion.g data-layer="lid" data-explode="156" {...layerIn(0.8, 76)}>
+          <Shell f={lidShell} dark />
+          <path d={seam} fill="none" stroke="var(--void)" strokeOpacity="0.35" strokeWidth="0.9" />
+          {RIBS.map((d, i) => <path key={i} d={d} stroke="var(--void)" strokeOpacity="0.35" strokeWidth="1" fill="none" />)}
+          {/* recessed label panel + branding */}
+          <path d={lidPanel} fill="var(--void)" fillOpacity="0.1" stroke="var(--void)" strokeOpacity="0.4" strokeWidth="0.9" />
+          <text transform={isoText(-40, -10, LID_TOP + 0.4)} fontFamily="var(--font-display)" fontSize="15" fontWeight="700" letterSpacing="1.5" fill="var(--void)" fillOpacity="0.92" textAnchor="middle">SIX SENSE</text>
+          <text transform={isoText(-40, 8, LID_TOP + 0.4)} fontFamily="var(--font-mono)" fontSize="8" letterSpacing="2.5" fill="var(--void)" fillOpacity="0.7" textAnchor="middle">MOBILITY · TCU-01</text>
+          <text transform={isoText(-40, 26, LID_TOP + 0.4)} fontFamily="var(--font-mono)" fontSize="6.5" letterSpacing="1.5" fill="var(--void)" fillOpacity="0.55" textAnchor="middle">AIS-140 CERTIFIED</text>
+          {/* status LED trio — only the product animates */}
+          {LEDS.map(({ p: [x, y], on }, i) => (
+            <g key={i}>
+              <circle cx={x} cy={y} r="3" fill="none" stroke="var(--void)" strokeOpacity="0.5" strokeWidth="0.8" />
+              <circle className={on ? 'loop-led' : undefined} cx={x} cy={y} r="1.8" fill={on ? 'var(--signal)' : 'var(--void)'} fillOpacity={on ? 1 : 0.35} />
             </g>
           ))}
-          <path d={labelPlate} fill="var(--void)" fillOpacity="0.08" stroke="var(--void)" strokeOpacity="0.45" strokeWidth="0.9" />
-          <text x={iso(-48, -2, LID_TOP)[0]} y={iso(-48, -2, LID_TOP)[1]} fontFamily="var(--font-mono)" fontSize="9" letterSpacing="1.5" fill="var(--void)" fillOpacity="0.9" textAnchor="middle" transform={`rotate(-30 ${iso(-48, -2, LID_TOP)[0]} ${iso(-48, -2, LID_TOP)[1]})`}>SSM TCU-01</text>
+          <text transform={isoText(89, 54, LID_TOP + 0.4)} fontFamily="var(--font-mono)" fontSize="5.5" letterSpacing="1.2" fill="var(--void)" fillOpacity="0.55" textAnchor="middle">GPS · NET · PWR</text>
         </motion.g>
 
-        {/* L6 — antenna puck + mast + ring */}
-        <motion.g data-layer="antenna" data-explode="258" {...layerIn(1.1, 110)}>
-          <Box f={puck} dark />
-          <path d={`M${mastB[0]},${mastB[1]} L${mastT[0]},${mastT[1]}`} {...stroke(0.8, 1.4)} fill="none" />
-          <circle cx={mastT[0]} cy={mastT[1]} r="3" fill="var(--signal)" />
-          <g className="loop-ring-scale">
-            <ellipse cx={ringC[0]} cy={ringC[1]} rx="86" ry="39" fill="none" stroke="var(--graphite)" strokeOpacity="0.3" strokeWidth="1" />
-            <ellipse className="loop-ring-rotate" cx={ringC[0]} cy={ringC[1]} rx="86" ry="39" pathLength="100" fill="none" stroke="var(--graphite)" strokeOpacity="0.6" strokeWidth="1.1" />
-            {!reduced && (
-              <circle r="2.6" fill="var(--signal)">
-                <animateMotion dur="40s" repeatCount="indefinite" path={`M${ringC[0] + 86},${ringC[1]} a86,39 0 1,0 -172,0 a86,39 0 1,0 172,0`} />
-              </circle>
-            )}
+        {/* idle GNSS signal arcs above the assembled device */}
+        {!reduced && (
+          <g fill="none" stroke="var(--signal)" strokeWidth="1.2" strokeLinecap="round">
+            <path className="loop-sig" d={arcAt(50, 10)} style={{ animationDelay: '0s' }} />
+            <path className="loop-sig" d={arcAt(60, 17)} style={{ animationDelay: '0.4s' }} />
+            <path className="loop-sig" d={arcAt(70, 24)} style={{ animationDelay: '0.8s' }} />
           </g>
-
-        </motion.g>
+        )}
       </g>
 
       {/* engineering callouts — revealed sequentially by scroll (§7) */}
       <g fontFamily="var(--font-mono)" fontSize="10" letterSpacing="1.2">
         {[
-          { id: 'antenna', n: '01', t: 'GNSS · LTE MESH ANTENNA', side: 1, y: -252 },
-          { id: 'lid', n: '02', t: 'DIE-CAST ENCLOSURE · IP67', side: -1, y: -172 },
-          { id: 'shield', n: '03', t: 'EMI SHIELD · PERFORATED', side: 1, y: -112 },
-          { id: 'comps', n: '04', t: 'EDGE SoC · CAN · eSIM', side: -1, y: -58 },
-          { id: 'pcb', n: '05', t: '6-LAYER PCB · AIS-140 I/O', side: 1, y: 0 },
-          { id: 'base', n: '06', t: 'AL BASE · VIBRATION MOUNT', side: -1, y: 56 },
+          { id: 'lid', n: '01', t: 'IP67 ENCLOSURE · ABS', side: -1, y: -196 },
+          { id: 'patch', n: '02', t: 'GNSS CERAMIC PATCH', side: 1, y: -150 },
+          { id: 'soc', n: '03', t: 'EDGE SoC · eSIM · CAN', side: -1, y: -112 },
+          { id: 'pcb', n: '04', t: '4-LAYER PCB · AIS-140 I/O', side: 1, y: -62 },
+          { id: 'flange', n: '05', t: 'MOUNTING FLANGE · M4', side: -1, y: -18 },
+          { id: 'harness', n: '06', t: 'VEHICLE HARNESS · 12-PIN', side: 1, y: 108 },
         ].map(({ id, n, t, side, y }) => {
-          const xEdge = side * 175
-          const xText = side * 318
+          const xEdge = side * 168
+          const xText = side * 300
           return (
             <g key={id} data-callout={id} opacity="0">
-              <path d={`M${xEdge},${y} L${side * 288},${y}`} stroke="var(--graphite)" strokeOpacity="0.55" strokeWidth="1" strokeDasharray="2 3" fill="none" />
+              <path d={`M${xEdge},${y} L${side * 272},${y}`} stroke="var(--graphite)" strokeOpacity="0.55" strokeWidth="1" strokeDasharray="2 3" fill="none" />
               <circle cx={xEdge} cy={y} r="2.2" fill="var(--signal)" />
               <text x={xText} y={y - 6} textAnchor={side === 1 ? 'end' : 'start'} fill="var(--signal)" fontSize="9">{n}</text>
               <text x={xText} y={y + 8} textAnchor={side === 1 ? 'end' : 'start'} fill="var(--ink)" fillOpacity="0.85">{t}</text>
@@ -302,7 +324,7 @@ export default function HeroIsometricAssembly() {
       {/* caption */}
       <motion.text
         {...g({ initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.5, delay: 1.4 } })}
-        x={0} y={198} textAnchor="middle" fontFamily="var(--font-mono)" fontSize="11" letterSpacing="2" fill="var(--graphite)"
+        x={0} y={196} textAnchor="middle" fontFamily="var(--font-mono)" fontSize="11" letterSpacing="2" fill="var(--graphite)"
       >
         SSM · TCU-01 · AIS-140 CERTIFIED
       </motion.text>

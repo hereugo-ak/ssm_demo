@@ -61,9 +61,12 @@ export default function useScrollChoreography(heroRef, { reduced }) {
 
         // Timeline is 100 units → position N === scrollProgress N/100.
 
-        // ---- 0.15–0.35 : text exits; assembly takes center stage
+        // ---- 0.15–0.35 : text exits; assembly takes center stage.
+        // Containment rule: the SVG viewBox reserves full explode headroom, so
+        // layer motion happens in user units INSIDE the svg box. The wrapper
+        // only makes small, bounded moves — nothing can leave the pinned hero.
         tl.to(copy, { y: -40, autoAlpha: 0, duration: 20 }, 15)
-        tl.to(scrollWrap, { x: '-16vw', y: '6vh', scale: 1.02, duration: 25 }, 15)
+        tl.to(scrollWrap, { x: '-14vw', y: '2vh', scale: 1.04, duration: 25 }, 15)
 
         // layers begin separating (30% of full explode)
         layers.forEach((el) => {
@@ -71,13 +74,12 @@ export default function useScrollChoreography(heroRef, { reduced }) {
           if (off) tl.to(el, { y: -off * 0.3, duration: 20 }, 15)
         })
 
-        // ---- 0.35–0.60 : full exploded view + guide lines
+        // ---- 0.35–0.60 : full exploded view + guide lines (all in-box)
         layers.forEach((el) => {
           const off = +el.dataset.explode || 0
           if (off) tl.to(el, { y: -off, duration: 25 }, 35)
         })
-        // keep the exploded stack centered: layers rise, container compensates down
-        tl.to(scrollWrap, { y: '14vh', scale: 0.92, duration: 25 }, 35)
+        tl.to(scrollWrap, { y: '4vh', scale: 0.98, duration: 25 }, 35)
         tl.to(guides, { autoAlpha: 1, duration: 10 }, 40)
 
         // ---- 0.60–0.85 : callouts reveal one at a time (real ordered BOM)
@@ -90,7 +92,7 @@ export default function useScrollChoreography(heroRef, { reduced }) {
           const off = +el.dataset.explode || 0
           if (off) tl.to(el, { y: 0, duration: 15 }, 85)
         })
-        tl.to(scrollWrap, { autoAlpha: 0.35, scale: 1.0, x: '-8vw', y: '0vh', duration: 15 }, 85)
+        tl.to(scrollWrap, { autoAlpha: 0.35, scale: 1.0, x: '-7vw', y: '0vh', duration: 15 }, 85)
       }, heroEl)
 
       ScrollTrigger.refresh()
